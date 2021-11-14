@@ -4,6 +4,7 @@ SB.IncludeDir(Path.Join(SB.DIRS.SRC, 'model/object'))
 
 function Model:init()
     self.areaManager = AreaManager()
+	self.mexManager = MexManager()
     self.variableManager = VariableManager()
     self.triggerManager = TriggerManager()
     self.teamManager = TeamManager()

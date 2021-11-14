@@ -1,5 +1,4 @@
 SB.Include(Path.Join(SB.DIRS.SRC, 'view/editor.lua'))
-
 MetalEditor = Editor:extends{}
 MetalEditor:Register({
     name = "metalEditor",
@@ -12,112 +11,212 @@ MetalEditor:Register({
 
 function MetalEditor:init()
     self:super("init")
-
-    self:AddField(AssetField({
-        name = "patternTexture",
-        title = "Pattern:",
-        rootDir = "brush_patterns/terrain/",
-        expand = true,
-        itemWidth = 65,
-        itemHeight = 65,
-        Validate = function(obj, value)
-            if value == nil then
-                return true
-            end
-            if not AssetField.Validate(obj, value) then
-                return false
-            end
-
-            local ext = Path.GetExt(value) or ""
-            return table.ifind(SB_IMG_EXTS, ext), value
-        end,
-        Update = function(...)
-            AssetField.Update(...)
-            local texture = self.fields["patternTexture"].value
-            SB.model.terrainManager:generateShape(texture)
-        end
-    }))
-    self.btnSetMetal = TabbedPanelButton({
-        x = 0,
+	self.bridge = mexBridge
+	self.mexList = {}
+    self.btnAddMetal = TabbedPanelButton({
+        x = 10,
         y = 0,
-        tooltip = "Left Click to set metal. Right click to remove it.",
+        tooltip = "Add Metal Spots by clicking on the map",
         children = {
             TabbedPanelImage({ file = Path.Join(SB.DIRS.IMG, 'metal-add.png') }),
-            TabbedPanelLabel({ caption = "Set" }),
+            TabbedPanelLabel({ caption = "Add" }),
         },
         OnClick = {
             function()
-                SB.stateManager:SetState(MetalEditingState(self))
+                self.type = "add"
+                SB.stateManager:SetState(AddMetalState(self))
             end
         },
     })
-    self:AddDefaultKeybinding({
-        self.btnSetMetal
-    })
-
-    self:AddControl("btn-show-metal", {
-        Button:New {
-            caption = "Show metal map",
-            width = 200,
-            height = 40,
-            OnClick = {
-                function()
-                    Spring.SendCommands('showmetalmap')
-                end
-            }
+    self:AddField(GroupField({
+		NumericField({
+            name = "defaultmetal",
+            title = "Metal:",
+            tooltip = "Amount of Metal in the spot",
+            value = 0,
+            step = .01,
+            width = 100,
+            decimals = 2,
+        }),
+        BooleanField({
+            name = "defaultxmirror",
+            title = "X-Mirror",
+            tooltip = "Mirror over X Axis?",
+            width = 100,
+            value = false,
+        }),
+        BooleanField({
+            name = "defaultzmirror",         
+            title = "Z-Mirror",
+            tooltip = "Mirror over Z Axis?",
+            width = 100,
+            value = false,
+        }),
+    },
+	{name = "defaultgroup"}
+	))
+	self:AddControl("default" .. "index", {
+		Line:New {
+            x = 0,
+			y = 0,
+            width = 480,
         },
     })
-
-    self:AddField(NumericField({
-        name = "size",
-        value = 100,
-        minValue = 40,
-        maxValue = 1000,
-        title = "Size:",
-        tooltip = "Size of the paint brush",
-    }))
-    self:AddField(NumericField({
-        name = "rotation",
-        value = 0,
-        minValue = -360,
-        maxValue = 360,
-        title = "Rotation:",
-        tooltip = "Rotation of the shape",
-    }))
-    self:AddField(NumericField({
-        name = "amount",
-        value = 50,
-        minValue = 0,
-        maxValue = 5.1,
-        title = "Amount:",
-        tooltip = "Amount of metal",
-    }))
+    self:AddDefaultKeybinding({
+        self.btnAddMetal
+    })
 
     local children = {
-        self.btnSetMetal,
+        self.btnAddMetal,
+        -- self.:GetControl(),
+    }
+
+    table.insert(children,
         ScrollPanel:New {
             x = 0,
-            y = 70,
+            y = "8%",
             bottom = 30,
             right = 0,
             borderColor = {0,0,0,0},
             horizontalScrollbar = false,
             children = { self.stackPanel },
-        },
-    }
+        }
+    )
+
     self:Finalize(children)
+    -- self:SetInvisibleFields(unpack(self.allFields))
+    -- self.type = "brush"
+end
+
+function MetalEditor:AddSpot(objectID, params)
+    self:AddControl("metalspot" .. objectID, {
+	        Line:New {
+			x = 200,
+            width = self.VALUE_POS,
+        },
+        Label:New {
+            caption = ("Metal Spot ID:" .. objectID),
+        },
+		Label:New {
+			x = 325,
+            caption = ("Mirror?"),
+        },
+    })
+    self:AddField(GroupField({
+        NumericField({
+            name = "x" .. objectID,
+            title = "X:",
+            tooltip = "metal",
+            value = params.x,
+            minValue = 0,
+            maxValue = Game.mapSizeX,
+            step = 1,
+            width = 75,
+            decimals = 0,
+        }),
+        NumericField({
+            name = "z" .. objectID,
+            title = "Z:",
+            tooltip = "Position (z)",
+            value = params.z,
+            minValue = 0,
+            maxValue = Game.mapSizeZ,
+            step = 1,
+            width = 75,
+            decimals = 0,
+        }),
+		NumericField({
+            name = "metal" .. objectID,
+            title = "Metal:",
+            tooltip = "Amount of Metal in the spot",
+            value = params.metal,
+            step = .01,
+            width = 95,
+            decimals = 2,
+        }),
+        BooleanField({
+            name = "xmirror" .. objectID,
+            title = "X",
+            tooltip = "Mirror over X",
+            width = 60,
+            value = params.xmirror,
+        }),
+        BooleanField({
+            name = "zmirror" .. objectID,
+            title = "Z",
+            tooltip = "Mirror over Z",
+            width = 60,
+            value = params.zmirror,
+        }),
+			BooleanField({
+			name = "DELETE" .. objectID,
+			title = "Delete", 
+			width = 60,
+			tooltip = "button",
+			value = false,
+		}),
+	}))
+end
+
+local function WriteToFile(path, content)
+    local file = assert(io.open(path, "w"))
+    file:write(content)
+    file:close()
+end
+
+function MetalEditor:OnEndChange(name)
+	if not name:find("default") then
+		self:UpdateSpots()
+	end
+end
+
+function MetalEditor:OnFieldChange(name, values)
+	if not name:find("default") then
+		if name:find("DELETE") then
+			local objectID, _ = name:gsub('(%a+)', "")
+			SB.model.mexManager:removeMex(tonumber(objectID))
+			self:UpdateSpots()
+		else
+			local key, _ = name:gsub("(%d+)", "")
+			local objectID, _ = name:gsub('(%a+)', "")
+			objectID = tonumber(objectID)
+			local partialObject = {}
+			partialObject[key] = values
+			-- SB.stateManager:SetState(ShowMetalState(self))
+			SB.model.mexManager:setMex(objectID, partialObject)
+		end
+	end
+end
+
+function MetalEditor:UpdateSpots()
+	for field, _ in pairs(self.fields) do
+		if not field:find("default") then
+			self:RemoveField(field)
+		end
+    end
+	for ID, params in pairs(SB.model.mexManager:getAllMexes()) do
+		self:AddSpot(ID, params)
+	end
 end
 
 function MetalEditor:IsValidState(state)
-    return state:is_A(MetalEditingState)
+    return (state:is_A(AddMetalState) or state:is_A(ShowMetalState))
 end
 
 function MetalEditor:OnLeaveState(state)
-    for _, btn in pairs({self.btnSetMetal}) do
+    for _, btn in pairs({self.btnAddMetal}) do
         btn:SetPressedState(false)
     end
+	if state:is_A(AddMetalState) then
+        self.btnAddMetal:SetPressedState(false)
+	end
 end
 
 function MetalEditor:OnEnterState(state)
-    self.btnSetMetal:SetPressedState(true)
+	if state:is_A(ShowMetalState) then
+		return
+	end
+	if state:is_A(AddMetalState) then
+		self.btnAddMetal:SetPressedState(true)
+	end
 end
