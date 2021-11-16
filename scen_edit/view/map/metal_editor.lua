@@ -11,8 +11,6 @@ MetalEditor:Register({
 
 function MetalEditor:init()
     self:super("init")
-	self.bridge = mexBridge
-	self.mexList = {}
     self.btnAddMetal = TabbedPanelButton({
         x = 10,
         y = 0,
@@ -24,6 +22,7 @@ function MetalEditor:init()
         OnClick = {
             function()
                 self.type = "add"
+				self.btnAddMetal:SetPressedState(true)
                 SB.stateManager:SetState(AddMetalState(self))
             end
         },
@@ -150,18 +149,12 @@ function MetalEditor:AddSpot(objectID, params)
         }),
 			BooleanField({
 			name = "DELETE" .. objectID,
-			title = "Delete", 
-			width = 60,
-			tooltip = "button",
+			title =  "\255\255\1\1( X )\255\255\255\255",
+			width = SB.conf.B_HEIGHT,
+			tooltip = "Remove Metal Spot",
 			value = false,
 		}),
 	}))
-end
-
-local function WriteToFile(path, content)
-    local file = assert(io.open(path, "w"))
-    file:write(content)
-    file:close()
 end
 
 function MetalEditor:OnEndChange(name)
@@ -182,7 +175,6 @@ function MetalEditor:OnFieldChange(name, values)
 			objectID = tonumber(objectID)
 			local partialObject = {}
 			partialObject[key] = values
-			-- SB.stateManager:SetState(ShowMetalState(self))
 			SB.model.mexManager:setMex(objectID, partialObject)
 		end
 	end
@@ -200,7 +192,7 @@ function MetalEditor:UpdateSpots()
 end
 
 function MetalEditor:IsValidState(state)
-    return (state:is_A(AddMetalState) or state:is_A(ShowMetalState))
+    return (state:is_A(AddMetalState) or state:is_A(ShowMetalState)) or state:is_A(DefaultState)
 end
 
 function MetalEditor:OnLeaveState(state)

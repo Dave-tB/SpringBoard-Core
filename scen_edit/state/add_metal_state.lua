@@ -25,6 +25,7 @@ function AddMetalState:MousePress(mx, my, button)
             self.params.x, _, self.params.z = math.floor(coords[1]), coords[2], math.floor(coords[3])
 			local objectID = SB.model.mexManager:addMex(self.params)
 			self.ev:UpdateSpots()
+			self.ev.btnAddMetal:SetPressedState(false)
             return true
         end
     elseif button == 3 then

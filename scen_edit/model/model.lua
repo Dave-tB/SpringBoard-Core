@@ -8,6 +8,7 @@ function Model:init()
     self.variableManager = VariableManager()
     self.triggerManager = TriggerManager()
     self.teamManager = TeamManager()
+	self.startboxManager = StartBoxManager()
     self.scenarioInfo = ScenarioInfo()
     self.terrainManager = TerrainManager()
     if Script.GetName() == "LuaUI" then
