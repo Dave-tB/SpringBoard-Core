@@ -1,7 +1,7 @@
 ViewStartBoxState = AbstractState:extends{}
 
 local box = {}
-local lastpoint = {}
+local dragID = nil
 
 function ViewStartBoxState:init(editorView)
     AbstractState.init(self, editorView)
@@ -12,10 +12,6 @@ end
 
 function ViewStartBoxState:enterState()
     AbstractState.enterState(self)
-
-    SB.SetGlobalRenderingFunction(function(...)
-        self:__DrawInfo(...)
-    end)
 end
 
 function ViewStartBoxState:leaveState()
@@ -24,32 +20,40 @@ function ViewStartBoxState:leaveState()
     SB.SetGlobalRenderingFunction(nil)
 end
 
-local function DistSq(x1, z1, x2, z2)
-	return (x1 - x2)*(x1 - x2) + (z1 - z2)*(z1 - z2)
-end
-
 function ViewStartBoxState:MousePress(mx, my, button)
     if button == 1 then
-        if result == "ground" then
-            self.params.x, _, self.params.z = math.floor(coords[1]), coords[2], math.floor(coords[3])
-			if #self.params.box > 1 then
-				if DistSq(self.params.box[1][1], self.params.box[1][2], coords[1], coords[3]) < 400 then
-					local ID = SB.model.startboxManager:addBox(self.params.box)
-					SB.stateManager:SetState(StartBoxState())
-					return true
-				end
-			end
-			table.insert(self.params.box, {coords[1], coords[3]})
-        end
+		local result, coords = Spring.TraceScreenRay(mx, my, true)
+		local x, z = coords[1], coords[3]
+		if dragID then
+			local pos = SB.model.startboxManager:setBoxPos(dragID, {x = coords[1], z = coords[3]})
+			SB.SetMouseCursor()
+			dragID = nil
+		else 
+			dragID = SB.model.startboxManager:getBoxIn(x, z)
+		end
+		if dragID then SB.SetMouseCursor ("drag") end
     elseif button == 3 then
-        SB.stateManager:SetState(StartBoxState())
+		local result, coords = Spring.TraceScreenRay(mx, my, true)
+		local x, z = coords[1], coords[3]
+		local ID = SB.model.startboxManager:getBoxIn(x, z)
+        if ID then 
+			SB.model.startboxManager:removeBox(ID)
+			self.ev:Populate()
+		end
     end
 end
 
 function ViewStartBoxState:MouseMove(mx, my, button)
 end
-
-function ViewStartBoxState:MouseRelease(...)
+	
+function ViewStartBoxState:MouseRelease(mx, my, button)
+    if button == 1 then
+		local result, coords = Spring.TraceScreenRay(mx, my, true)
+		if dragID then
+			local pos = SB.model.startboxManager:setBoxPos(dragID, {x = coords[1], z = coords[3]})
+			dragID = nil
+		end
+    end 
 end
 
 local function DrawSpot(x, z, metal, mirror)
@@ -81,19 +85,6 @@ end
 
 local function cross_product(px, pz, ax, az, bx, bz)
 	return ((px - bx)*(az - bz) - (ax - bx)*(pz - bz))
-end
-
-local function dump(o)
-   if type(o) == 'table' then
-      local s = '{ '
-      for k,v in pairs(o) do
-         if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. dump(v) .. ','
-      end
-      return s .. '} '
-   else
-      return tostring(o)
-   end
 end
 
 local function triangulate(polies)
@@ -193,33 +184,39 @@ local function DrawSpot(x, z, metal, mirror)
 	gl.PopMatrix()
 end
 
-
 function DrawText(boxID)
+	local center = SB.model.startboxManager:getBoxPos(boxID)
+    local y = Spring.GetGroundHeight(center.x, center.z)
     gl.PushMatrix()
         gl.Rotate(90, 1, 0, 0)
         local fontSize = 58
         local txt = tostring(boxID)
         local w = gl.GetTextWidth(txt) * fontSize
         local h = gl.GetTextHeight(txt) * fontSize
-		local cx, cz = 0, 0
-		for i, j in pairs(box) do
-			cx = cx + box[i][1]
-			cz = cz + box[i][2]
-		end
-        local y = Spring.GetGroundHeight(cx, cz)
-        gl.Translate(cx, cz, -y)
+        gl.Translate(center.x-15, center.z+15, -y)
         gl.Color(1, 1, 1, 1)
         gl.Rotate(180, 0, 0, 1)
         gl.Scale(-1, 1, 1)
         gl.Text(txt, 0, 0, fontSize)
+    gl.PopMatrix()
+    gl.PushMatrix()
+		local x1, z1, x2, z2 = center.x - 40, center.z - 40, center.x + 40, center.z + 40
+        local bt = 4
+        gl.Color(1, 1, 1, 0.7)
+        gl.Utilities.DrawGroundRectangle(x1-bt, z1-bt, x1, z2+bt)
+        gl.Utilities.DrawGroundRectangle(x2, z1-bt, x2+bt, z2+bt)
+        gl.Utilities.DrawGroundRectangle(x1, z1-bt, x2, z1)
+        gl.Utilities.DrawGroundRectangle(x1, z2, x2, z2+bt)
     gl.PopMatrix()
 end
 
 function ViewStartBoxState:DrawWorld()
 	local startboxes = SB.model.startboxManager:getAllStartBoxes()
 	local triboxes = triangulate(startboxes)
-	for ID, box in pairs(triboxes) do
-		DrawText(boxID)
+	for ID, _ in pairs(startboxes) do
+		DrawText(ID)
+	end
+	for _, box in pairs(triboxes) do
 		gl.PushMatrix()
 			gl.DepthTest(true)
 			gl.Color(0,1,0,0.2)
@@ -243,5 +240,4 @@ function ViewStartBoxState:DrawWorld()
 			DrawSpot(x, z, metal, true)
 		end
 	end
-	
 end

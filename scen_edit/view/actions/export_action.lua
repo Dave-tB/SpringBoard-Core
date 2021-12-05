@@ -19,13 +19,15 @@ ExportAction.EXPORT_MAP_INFO = "Map info"
 ExportAction.EXPORT_S11N = "s11n object format"
 ExportAction.EXPORT_HEIGHTMAP = "Heightmap only (fast)"
 ExportAction.EXPORT_METALSPOT_CONFIG = "Export Metal Map Config (ZK)"
+ExportAction.EXPORT_STARTBOX_CONFIG = "Export Start Box Config (ZK)"
 local fileTypes = {
     ExportAction.EXPORT_SPRING_ARCHIVE,
     ExportAction.EXPORT_MAP_TEXTURES,
     ExportAction.EXPORT_MAP_INFO,
     ExportAction.EXPORT_S11N,
 	ExportAction.EXPORT_HEIGHTMAP,
-	ExportAction.EXPORT_METALSPOT_CONFIG
+	ExportAction.EXPORT_METALSPOT_CONFIG,
+	ExportAction.EXPORT_STARTBOX_CONFIG
 }
 
 function ExportAction:canExecute()
@@ -122,6 +124,13 @@ function ExportAction:execute()
 
                 Log.Notice("Exporting map metalspot config...")
                 exportCommand = ExportMetalSpotConfigCommand(path)
+			elseif fileType == ExportAction.EXPORT_STARTBOX_CONFIG then
+                if isDir then
+                    return false, "Please select a file"
+                end
+
+                Log.Notice("Exporting map startbox config...")
+                exportCommand = ExportStartBoxConfigCommand(path)
             elseif fileType == ExportAction.EXPORT_MAP_INFO then
                 if isDir then
                     return false, "Please select a file"
@@ -315,4 +324,8 @@ end
 
 function ExportAction:ExportMetalSpotConfig(path)
 	return ExportMetalSpotConfigCommand((path .. ".lua")):execute()
+end
+
+function ExportAction:ExportStartBoxConfig(path)
+	return ExportStartBoxConfigCommand((path .. ".lua")):execute()
 end

@@ -14,18 +14,38 @@ function AddRectState:leaveState()
     SB.SetGlobalRenderingFunction(nil)
 end
 
+local function DistSq(x1, z1, x2, z2)
+	return (x1 - x2)*(x1 - x2) + (z1 - z2)*(z1 - z2)
+end
+
 function AddRectState:MousePress(mx, my, button)
     if button == 1 then
-        if self.addSecondPoint then
-            return
-        end
+		self.box = self.box or {}
         local result, coords = Spring.TraceScreenRay(mx, my, true)
         if result == "ground" then
-            self.startX = coords[1]
-            self.startZ = coords[3]
-            self.endX = coords[1]
-            self.endZ = coords[3]
-            self.addSecondPoint = true
+			if #self.box > 1 then
+				if DistSq(self.box[1][1], self.box[1][2], coords[1], coords[3]) < 120 then
+					local x, z = 0, 0
+					for i, j in pairs(self.box) do
+						x = x + self.box[i][1]
+						z = z + self.box[i][2]
+					end
+					local posx, posz = x / #self.box, z / #self.box
+					local boxList = {}
+					for i, j  in pairs{self.box} do
+						table.insert(boxList, j)
+					end
+					local cmd = AddObjectCommand(areaBridge.name, {
+						pos = { x = posx, y = 0, z = posz},
+						size = {},
+						polygon = {boxList},
+					})
+					SB.commandManager:execute(cmd)
+					SB.stateManager:SetState(DefaultState())
+					return true
+				end
+			end
+            table.insert(self.box, {coords[1], coords[3]})
             return true
         end
     else
@@ -34,51 +54,89 @@ function AddRectState:MousePress(mx, my, button)
 end
 
 function AddRectState:MouseMove(mx, my, mdx, mdy, button)
-    if not self.addSecondPoint then
-        return
-    end
-
-    local result, coords = Spring.TraceScreenRay(mx, my, true)
-    if result == "ground" then
-        self.endX = coords[1]
-        self.endZ = coords[3]
-    end
+	if button == 1 then
+		local result, coords = Spring.TraceScreenRay(mx, my, true)
+        if result == "ground" then
+			if #self.box > 1 then
+				if DistSq(self.box[1][1], self.box[1][2], coords[1], coords[3]) < 120 then
+					local x, z = 0, 0
+					local boxList = {}
+					for i, j  in pairs{self.box} do
+						table.insert(boxList, j)
+					end
+					for i, j in pairs(self.box) do
+						x = x + self.box[i][1]
+						z = z + self.box[i][2]
+					end
+					local posx, posz = x / #self.box, z / #self.box
+					local cmd = AddObjectCommand(areaBridge.name, {
+						pos = { x = posx, y = 0, z = posz},
+						size = {},
+						polygon = {boxList},
+					})
+					SB.commandManager:execute(cmd)
+					SB.stateManager:SetState(DefaultState())
+					return true
+				end
+			end
+            table.insert(self.box, {coords[1], coords[3]})
+            return true
+        end
+	end
 end
 
 function AddRectState:MouseRelease(mx, my, button)
-    if not self.addSecondPoint then
-        return
-    end
+end
 
-    if button ~= 1 then
-        return
-    end
+local function DrawFinalLine(box)
+	for i = 1, #box do
+		local x = box[i][1]
+		local z = box[i][2]
+		local y = Spring.GetGroundHeight(x, z) + 5
+		gl.Vertex(x,y,z)
+	end
+end
 
-    local result, coords = Spring.TraceScreenRay(mx, my, true)
-    if result == "ground" then
-        self.endX = coords[1]
-        self.endZ = coords[3]
-    end
-    if self.endX == nil or self.endZ == nil then
-        return
-    end
+local function DrawFirstPoint(x,z)
+	gl.PushMatrix()
+		gl.DepthTest(true)
+		gl.Color(1, 1, 1, .8)
+		gl.LineWidth(10)
+		gl.DrawGroundCircle(x, 1, z, 5, 21)
+		gl.Color(1, 1, 1, .8)
+	gl.PopMatrix()
+end
 
-    local cmd = AddObjectCommand(areaBridge.name, {
-        pos = { x = (self.startX + self.endX)/2, y = 0, z = (self.startZ + self.endZ)/2},
-        size = { x = math.abs(self.endX - self.startX), y = 0, z = math.abs(self.endZ - self.startZ)},
-    })
-    SB.commandManager:execute(cmd)
-
-    SB.stateManager:SetState(DefaultState())
+local function DrawLine(box)
+	local x = box[#box][1]
+	local z = box[#box][2]
+	local y = Spring.GetGroundHeight(x, z) + 10
+	gl.Vertex(x,y,z)
+	local mx,my = Spring.GetMouseState()
+	local result, coords = Spring.TraceScreenRay(mx, my, true)
+	
+	if result == "ground" then
+		local x1, z1, x2, z2 = coords[1], coords[3], box[1][1], box[1][2]
+		if DistSq(x1, z1, x2, z2) < 25 then
+			gl.LineWidth(25)
+		end
+		gl.Vertex(coords[1], coords[2] + 10, coords[3])
+	end
 end
 
 function AddRectState:DrawWorld()
-    gl.PushMatrix()
-    gl.Color(0, 1, 0, 0.2)
-    if self.addSecondPoint then
-        areaBridge.DrawObject(nil, {self.startX, self.startZ, self.endX, self.endZ})
-    end
-    gl.PopMatrix()
+	if not self.box then return end
+	if (#self.box == 0) then return end
+	DrawFirstPoint(self.box[1][1], self.box[1][2])
+	gl.LineWidth(6)
+	gl.Color(0, 1, 0, .4)
+	for i = 1, #self.box do
+		gl.BeginEnd(GL.LINE_STRIP, DrawFinalLine, self.box)
+	end
+	gl.Color(0, 1, 0, .2)
+	gl.BeginEnd(GL.LINE_STRIP, DrawLine, self.box)
+	gl.LineWidth(1)
+	gl.Color(1, 1, 1, 1)
 end
 
 function AddRectState:__GetInfoText()

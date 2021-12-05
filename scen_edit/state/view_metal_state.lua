@@ -1,6 +1,6 @@
-AddMetalState = AbstractState:extends{}
+ViewMetalState = AbstractState:extends{}
 
-function AddMetalState:init(editorView)
+function ViewMetalState:init(editorView)
     AbstractState.init(self, editorView)
 	self.params = {}
 	self.params.metal = editorView.fields["defaultmetal"].value
@@ -10,24 +10,32 @@ function AddMetalState:init(editorView)
 	self.ev = editorView
 end
 
-function AddMetalState:enterState()
+function ViewMetalState:enterState()
 	AbstractState.enterState(self)
 end
 
-function AddMetalState:leaveState()
+function ViewMetalState:leaveState()
     AbstractState.leaveState(self)
 end
 
-function AddMetalState:MousePress(mx, my, button)
+function ViewMetalState:MousePress(mx, my, button)
     if button == 1 then
         local result, coords = Spring.TraceScreenRay(mx, my, true)
-        if result == "ground" then
-            self.params.x, _, self.params.z = math.floor(coords[1]), coords[2], math.floor(coords[3])
-			local objectID = SB.model.mexManager:addMex(self.params)
-            return true
-        end
-    elseif button == 3 then
-        SB.stateManager:SetState(ViewMetalState(self.ev))
+		if dragID then
+			local metalspot = SB.model.mexManager:setMex(dragID, {x = coords[1], z = coords[3]})
+			SB.SetMouseCursor()
+			dragID = nil
+		else 
+			dragID = SB.model.mexManager:getMexIn(coords[1], coords[3])
+		end
+		if dragID then SB.SetMouseCursor ("drag") end
+	elseif button == 3 then
+		local result, coords = Spring.TraceScreenRay(mx, my, true)
+		local x, z = coords[1], coords[3]
+		local ID = SB.model.mexManager:getMexIn(x, z)
+        if ID then 
+			SB.model.mexManager:removeMex(ID)
+		end
     end
 end
 
@@ -58,7 +66,7 @@ local function DrawSpot(x, z, metal, mirror)
 	gl.PopMatrix()
 end
 
-function AddMetalState:DrawWorld()
+function ViewMetalState:DrawWorld()
 	for ID, params in pairs(SB.model.mexManager:getAllMexes()) do
 		local x = params.x
 		local z = params.z
@@ -78,6 +86,6 @@ function AddMetalState:DrawWorld()
 	end
 end
 
-function AddMetalState:MouseRelease(...)
-	SB.stateManager:SetState(ViewMetalState(self.ev))
+function ViewMetalState:MouseRelease(...)
+	SB.stateManager:SetState(DefaultState())
 end

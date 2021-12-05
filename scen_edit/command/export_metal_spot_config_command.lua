@@ -30,8 +30,8 @@ end
 
 function ExportMetalSpotConfigCommand:execute()
     local file = assert(io.open(self.path, "w"))
-    file:write("local allspots = {")
-    file:write(table.show(self:GetMetalSpots():sub(#"return ")))
-    file:write("\n}\nreturn {spots = allspots}")
+    file:write("local allspots = ")
+    file:write(table.show(self:GetMetalSpots()):sub(#"return "))
+    file:write("\nreturn {spots = allspots}")
     file:close()
 end
